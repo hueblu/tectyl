@@ -4,8 +4,9 @@ use crossterm::{
     terminal::{self, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
 };
-use futures::{future::FutureExt, StreamExt};
+use futures::StreamExt;
 use tokio::{sync::mpsc, task::JoinHandle};
+use tokio_util::sync::CancellationToken;
 
 use std::io::{stdout, Stdout};
 
@@ -16,6 +17,7 @@ pub struct Terminal {
     events: mpsc::Receiver<Event>,
 
     thread: JoinHandle<()>,
+    cancel: CancellationToken,
 }
 
 impl Terminal {
@@ -28,11 +30,14 @@ impl Terminal {
         let size = terminal::size()?;
 
         let (tx, rx) = mpsc::channel(20);
+        let token = CancellationToken::new();
+        let token_clone = token.clone();
         let thread = tokio::spawn(async move {
             let mut event_stream = EventStream::new();
 
             loop {
                 let event_future = event_stream.next();
+                let cancel = token.cancelled();
 
                 tokio::select! {
                     maybe_event = event_future => {
@@ -42,6 +47,9 @@ impl Terminal {
                             _ => {}
                         }
                     }
+                    _ = cancel => {
+                        break;
+                    }
                 }
             }
         });
@@ -50,7 +58,9 @@ impl Terminal {
             size,
             out,
             events: rx,
+
             thread,
+            cancel: token_clone,
         })
     }
 
@@ -63,7 +73,17 @@ impl Terminal {
     }
 
     pub fn exit(&mut self) -> Result<()> {
+        self.cancel.cancel();
+
+        self.thread.abort();
+
         self.out.execute(LeaveAlternateScreen)?;
+        terminal::disable_raw_mode()?;
+        Ok(())
+    }
+
+    pub fn stop() -> Result<()> {
+        std::io::stdout().execute(LeaveAlternateScreen)?;
         terminal::disable_raw_mode()?;
         Ok(())
     }

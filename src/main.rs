@@ -1,21 +1,36 @@
-use crossterm::ExecutableCommand;
+#![feature(panic_update_hook)]
+
 use crossterm::QueueableCommand;
-use std::io::Write;
+use std::{fs::File, io::Write};
+use tracing::Level;
 
 use anyhow::Result;
 use crossterm::{
     cursor::MoveTo,
-    event::{read, Event, KeyCode, KeyEvent, KeyModifiers},
-    terminal::{Clear, ClearType, LeaveAlternateScreen},
+    event::{Event, KeyCode, KeyEvent, KeyModifiers},
+    terminal::{Clear, ClearType},
 };
 
 use tectyl::{editor::Editor, tui::Terminal};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    init_logging()?;
+
     let mut terminal = Terminal::new()?;
 
-    let mut editor = Editor::new();
+    std::panic::update_hook(move |prev, info| {
+        tracing::error!(?info, "THREAD PANICKED");
+        let _ = Terminal::stop();
+        prev(info);
+    });
+
+    tracing::error!("bussknuckle");
+
+    let mut editor = Editor::new().await?;
+
+    editor.draw(&mut terminal)?;
+    terminal.out.flush()?;
 
     loop {
         match terminal.recv_event().await {
@@ -37,8 +52,18 @@ async fn main() -> Result<()> {
         terminal.out.flush()?;
     }
 
-    terminal.out.execute(LeaveAlternateScreen)?;
-    crossterm::terminal::disable_raw_mode()?;
+    terminal.exit()?;
+
+    Ok(())
+}
+
+fn init_logging() -> Result<()> {
+    let open_file = File::options().write(true).create(true).open("log")?;
+
+    tracing_subscriber::fmt()
+        .with_max_level(Level::TRACE)
+        .with_writer(open_file)
+        .init();
 
     Ok(())
 }
