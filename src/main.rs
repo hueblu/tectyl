@@ -1,7 +1,8 @@
 #![feature(panic_update_hook)]
 
 use crossterm::QueueableCommand;
-use std::{fs::File, io::Write};
+use std::fs::File;
+use std::io::Write;
 use tracing::Level;
 
 use anyhow::Result;
@@ -11,7 +12,7 @@ use crossterm::{
     terminal::{Clear, ClearType},
 };
 
-use tectyl::{editor::Editor, tui::Terminal};
+use tectyl::{editor::Editor, term::Terminal};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -30,7 +31,7 @@ async fn main() -> Result<()> {
     let mut editor = Editor::new().await?;
 
     editor.draw(&mut terminal)?;
-    terminal.out.flush()?;
+    terminal.flush()?;
 
     loop {
         match terminal.recv_event().await {
@@ -45,11 +46,11 @@ async fn main() -> Result<()> {
             _ => {}
         }
 
-        terminal.out.queue(MoveTo(0, 0))?;
-        terminal.out.queue(Clear(ClearType::All))?;
+        terminal.queue(MoveTo(0, 0))?;
+        terminal.queue(Clear(ClearType::All))?;
 
         editor.draw(&mut terminal)?;
-        terminal.out.flush()?;
+        terminal.flush()?;
     }
 
     terminal.exit()?;

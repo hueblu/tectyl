@@ -1,2 +1,2 @@
 pub mod editor;
-pub mod tui;
+pub mod term;

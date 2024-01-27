@@ -1,3 +1,4 @@
+use crossterm::QueueableCommand;
 use std::{path::PathBuf, str::FromStr, usize};
 
 use anyhow::Result;
@@ -5,11 +6,10 @@ use crossterm::{
     cursor::{MoveTo, MoveToColumn},
     event::{KeyCode, KeyEvent},
     style::Print,
-    QueueableCommand,
 };
 use tokio::{fs::File, io::BufReader};
 
-use crate::tui::Terminal;
+use crate::term::Terminal;
 
 pub struct Editor {
     documents: Vec<Document>,
@@ -87,11 +87,10 @@ impl Editor {
         let cursor_pos = self.get_active_doc().cursor_pos(None);
 
         for line in lines.take(size.1.into()) {
-            terminal.out.queue(MoveToColumn(0))?.queue(Print(line))?;
+            terminal.queue(MoveToColumn(0))?.queue(Print(line))?;
         }
 
         terminal
-            .out
             .queue(MoveTo(0, size.1))?
             .queue(Print(self.mode))?
             .queue(MoveTo(cursor_pos.0 - self.scroll as u16, cursor_pos.1))?;

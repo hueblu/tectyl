@@ -8,12 +8,15 @@ use futures::StreamExt;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 
-use std::io::{stdout, Stdout};
+use std::{
+    io::{stdout, Stdout},
+    ops::{Deref, DerefMut},
+};
 
 pub struct Terminal {
     size: (u16, u16),
 
-    pub out: Stdout,
+    out: Stdout,
     events: mpsc::Receiver<Event>,
 
     thread: JoinHandle<()>,
@@ -92,5 +95,19 @@ impl Terminal {
 impl Drop for Terminal {
     fn drop(&mut self) {
         let _ = self.exit();
+    }
+}
+
+impl Deref for Terminal {
+    type Target = Stdout;
+
+    fn deref(&self) -> &Self::Target {
+        &self.out
+    }
+}
+
+impl DerefMut for Terminal {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.out
     }
 }
