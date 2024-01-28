@@ -5,16 +5,20 @@ use crossterm::{
     ExecutableCommand,
 };
 use futures::StreamExt;
-use tokio::{sync::mpsc, task::JoinHandle};
+use tokio::{
+    sync::{mpsc, Mutex},
+    task::JoinHandle,
+};
 use tokio_util::sync::CancellationToken;
 
 use std::{
     io::{stdout, Stdout},
     ops::{Deref, DerefMut},
+    sync::Arc,
 };
 
 pub struct Terminal {
-    size: (u16, u16),
+    size: Arc<Mutex<(u16, u16)>>,
 
     out: Stdout,
     events: mpsc::Receiver<Event>,
@@ -30,7 +34,8 @@ impl Terminal {
         terminal::enable_raw_mode()?;
         out.execute(EnterAlternateScreen)?;
 
-        let size = terminal::size()?;
+        let size = Arc::new(Mutex::new(terminal::size()?));
+        let size_clone = size.clone();
 
         let (tx, rx) = mpsc::channel(20);
         let token = CancellationToken::new();
@@ -45,7 +50,13 @@ impl Terminal {
                 tokio::select! {
                     maybe_event = event_future => {
                         match maybe_event {
-                            Some(Ok(event)) => { let _ = tx.send(event).await; }
+                            Some(Ok(event)) => {
+                                if let Event::Resize(x, y) = event {
+                                    *size_clone.lock().await = (x, y);
+                                }
+                                let _ = tx.send(event);
+
+                            }
                             None => { break; }
                             _ => {}
                         }
@@ -72,7 +83,7 @@ impl Terminal {
     }
 
     pub fn size(&self) -> (u16, u16) {
-        self.size
+        *self.size.blocking_lock()
     }
 
     pub fn exit(&mut self) -> Result<()> {

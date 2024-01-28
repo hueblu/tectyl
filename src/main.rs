@@ -1,8 +1,6 @@
 #![feature(panic_update_hook)]
 
-use crossterm::QueueableCommand;
 use std::fs::File;
-use std::io::Write;
 use tracing::Level;
 
 use anyhow::Result;
@@ -12,13 +10,16 @@ use crossterm::{
     terminal::{Clear, ClearType},
 };
 
-use tectyl::{editor::Editor, term::Terminal};
+use tectyl::{
+    editor::Editor,
+    term::{tui::Tui, Terminal},
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     init_logging()?;
 
-    let mut terminal = Terminal::new()?;
+    let mut tui = Tui::new()?;
 
     std::panic::update_hook(move |prev, info| {
         tracing::error!(?info, "THREAD PANICKED");
@@ -30,11 +31,11 @@ async fn main() -> Result<()> {
 
     let mut editor = Editor::new().await?;
 
-    editor.draw(&mut terminal)?;
-    terminal.flush()?;
-
     loop {
-        match terminal.recv_event().await {
+        // tui.draw()
+        // tui.flush()
+
+        match tui.recv_event().await {
             None => break,
             Some(Event::Key(KeyEvent {
                 code: KeyCode::Char('c'),
@@ -45,15 +46,7 @@ async fn main() -> Result<()> {
 
             _ => {}
         }
-
-        terminal.queue(MoveTo(0, 0))?;
-        terminal.queue(Clear(ClearType::All))?;
-
-        editor.draw(&mut terminal)?;
-        terminal.flush()?;
     }
-
-    terminal.exit()?;
 
     Ok(())
 }

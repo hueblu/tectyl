@@ -6,7 +6,7 @@ pub struct ScreenBuffer {
     cells: Vec<char>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ScreenBufferDiff {
     size: (u16, u16),
     cells: Vec<Option<char>>,
