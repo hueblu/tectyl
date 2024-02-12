@@ -1,8 +1,10 @@
 use anyhow::Result;
 use crossterm::{
+    cursor::MoveTo,
     event::{Event, EventStream},
+    style::Print,
     terminal::{self, EnterAlternateScreen, LeaveAlternateScreen},
-    ExecutableCommand,
+    ExecutableCommand, QueueableCommand,
 };
 use futures::StreamExt;
 use tokio::{
@@ -17,8 +19,10 @@ use std::{
     sync::Arc,
 };
 
+use super::util::{ScreenBuffer, ScreenBufferDiff};
+
 pub struct Terminal {
-    size: Arc<Mutex<(u16, u16)>>,
+    size: Arc<Mutex<(usize, usize)>>,
 
     out: Stdout,
     events: mpsc::Receiver<Event>,
@@ -34,7 +38,8 @@ impl Terminal {
         terminal::enable_raw_mode()?;
         out.execute(EnterAlternateScreen)?;
 
-        let size = Arc::new(Mutex::new(terminal::size()?));
+        let size = terminal::size()?;
+        let size = Arc::new(Mutex::new((size.0 as usize, size.1 as usize)));
         let size_clone = size.clone();
 
         let (tx, rx) = mpsc::channel(20);
@@ -52,9 +57,9 @@ impl Terminal {
                         match maybe_event {
                             Some(Ok(event)) => {
                                 if let Event::Resize(x, y) = event {
-                                    *size_clone.lock().await = (x, y);
+                                    *size_clone.lock().await = (x as usize, y as usize);
                                 }
-                                let _ = tx.send(event);
+                                let _ = tx.send(event).await;
 
                             }
                             None => { break; }
@@ -82,8 +87,23 @@ impl Terminal {
         self.events.recv().await
     }
 
-    pub fn size(&self) -> (u16, u16) {
-        *self.size.blocking_lock()
+    pub async fn size(&self) -> (usize, usize) {
+        *self.size.lock().await
+    }
+
+    pub fn draw_buffer(&mut self, buf: ScreenBuffer) -> Result<()> {
+        let lines = String::from_iter(buf.cells.clone());
+        self.out.queue(MoveTo(0, 0))?;
+
+        for line in lines.chars().take(buf.size().0) {
+            self.out.queue(Print(line))?;
+        }
+
+        Ok(())
+    }
+
+    pub fn draw_buffer_diff(&self, buf: ScreenBufferDiff) -> Result<()> {
+        Ok(())
     }
 
     pub fn exit(&mut self) -> Result<()> {
@@ -99,6 +119,7 @@ impl Terminal {
     pub fn stop() -> Result<()> {
         std::io::stdout().execute(LeaveAlternateScreen)?;
         terminal::disable_raw_mode()?;
+
         Ok(())
     }
 }

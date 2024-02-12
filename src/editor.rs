@@ -35,8 +35,7 @@ enum Mode {
 }
 
 impl Editor {
-    //TODO remove need for async and result by not opening file in this method
-    pub async fn new() -> Result<Self> {
+    pub fn new() -> Result<Self> {
         Ok(Self {
             documents: vec![Document::from_string("./src/main.rs")],
             active_doc: 0,
@@ -54,14 +53,14 @@ impl Editor {
         &mut self.documents[self.active_doc]
     }
 
-    pub fn handle_event(&mut self, event: KeyEvent) {
+    pub fn handle_event(&mut self, event: KeyEvent) -> Result<()> {
         match self.mode {
             Mode::Input => match event.code {
                 KeyCode::Char(c) => {
                     self.get_active_doc_mut().insert(c);
                 }
                 KeyCode::Backspace => {
-                    self.get_active_doc_mut().remove(1);
+                    self.get_active_doc_mut().remove(1)?;
                 }
                 KeyCode::Enter => {
                     self.get_active_doc_mut().insert('\n');
@@ -71,27 +70,28 @@ impl Editor {
                 }
                 _ => {}
             },
-            Mode::Normal => match event.code {
-                KeyCode::Char('i') => self.mode = Mode::Input,
-
-                _ => {}
-            },
+            Mode::Normal => {
+                if let KeyCode::Char('i') = event.code {
+                    self.mode = Mode::Input
+                }
+            }
 
             _ => {}
         }
+        Ok(())
     }
 
-    pub fn draw(&self, terminal: &mut Terminal) -> Result<()> {
+    pub async fn draw(&self, terminal: &mut Terminal) -> Result<()> {
         let lines = self.get_active_doc().buffer.lines_at(self.scroll);
-        let size = terminal.size();
+        let size = terminal.size().await;
         let cursor_pos = self.get_active_doc().cursor_pos(None);
 
-        for line in lines.take(size.1.into()) {
+        for line in lines.take(size.1) {
             terminal.queue(MoveToColumn(0))?.queue(Print(line))?;
         }
 
         terminal
-            .queue(MoveTo(0, size.1))?
+            .queue(MoveTo(0, size.1 as u16))?
             .queue(Print(self.mode))?
             .queue(MoveTo(cursor_pos.0 - self.scroll as u16, cursor_pos.1))?;
 
@@ -118,7 +118,7 @@ impl Document {
     }
 
     pub async fn from_file<S: ToString>(s: S) -> Result<Self> {
-        let path = PathBuf::from_str(&*s.to_string())?;
+        let path = PathBuf::from_str(&s.to_string())?;
         let file = File::open(&path).await?;
         let buffer = ropey::Rope::from_reader(BufReader::new(file).buffer())?;
 
@@ -131,7 +131,7 @@ impl Document {
 
     pub fn insert<S: ToString>(&mut self, s: S) {
         let s = s.to_string();
-        self.buffer.insert(self.cursor_idx, &*s);
+        self.buffer.insert(self.cursor_idx, &s);
         self.cursor_idx += s.len();
     }
 
@@ -140,11 +140,13 @@ impl Document {
         self.cursor_idx += 1;
     }
 
-    pub fn remove(&mut self, chars: usize) {
+    pub fn remove(&mut self, chars: usize) -> Result<()> {
         self.buffer
-            .remove(self.cursor_idx.saturating_sub(chars)..self.cursor_idx);
+            .try_remove(self.cursor_idx.saturating_sub(chars)..self.cursor_idx)?;
 
         self.cursor_idx = self.cursor_idx.saturating_sub(chars);
+
+        Ok(())
     }
 
     // wrap:

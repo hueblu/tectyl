@@ -1,14 +1,12 @@
 #![feature(panic_update_hook)]
+#![allow(dead_code)]
+#![allow(unused)]
 
 use std::fs::File;
-use tracing::Level;
+use tracing::{warn, Level};
 
 use anyhow::Result;
-use crossterm::{
-    cursor::MoveTo,
-    event::{Event, KeyCode, KeyEvent, KeyModifiers},
-    terminal::{Clear, ClearType},
-};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
 use tectyl::{
     editor::Editor,
@@ -19,30 +17,31 @@ use tectyl::{
 async fn main() -> Result<()> {
     init_logging()?;
 
-    let mut tui = Tui::new()?;
-
     std::panic::update_hook(move |prev, info| {
         tracing::error!(?info, "THREAD PANICKED");
         let _ = Terminal::stop();
+
+        println!("{info:?}");
         prev(info);
     });
 
-    tracing::error!("bussknuckle");
-
-    let mut editor = Editor::new().await?;
+    let mut editor = Editor::new()?;
+    let mut terminal = Terminal::new()?;
 
     loop {
         // tui.draw()
         // tui.flush()
 
-        match tui.recv_event().await {
+        warn!("penis");
+
+        match terminal.recv_event().await {
             None => break,
             Some(Event::Key(KeyEvent {
                 code: KeyCode::Char('c'),
                 modifiers,
                 ..
-            })) if modifiers.contains(KeyModifiers::CONTROL) => break,
-            Some(Event::Key(keyevent)) => editor.handle_event(keyevent),
+            })) if modifiers.contains(KeyModifiers::CONTROL) => panic!("balls"),
+            Some(Event::Key(keyevent)) => editor.handle_event(keyevent)?,
 
             _ => {}
         }
@@ -52,10 +51,14 @@ async fn main() -> Result<()> {
 }
 
 fn init_logging() -> Result<()> {
-    let open_file = File::options().write(true).create(true).open("log")?;
+    let open_file = File::options()
+        .append(false)
+        .write(true)
+        .create(true)
+        .open("log")?;
 
     tracing_subscriber::fmt()
-        .with_max_level(Level::TRACE)
+        .with_max_level(Level::INFO)
         .with_writer(open_file)
         .init();
 

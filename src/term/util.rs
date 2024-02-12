@@ -1,36 +1,44 @@
 use anyhow::Result;
 
 pub struct ScreenBuffer {
-    size: (u16, u16),
+    size: (usize, usize),
 
-    cells: Vec<char>,
+    pub cells: Vec<char>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ScreenBufferDiff {
-    size: (u16, u16),
-    cells: Vec<Option<char>>,
+    size: (usize, usize),
+    pub cells: Vec<Option<char>>,
 }
 
 impl ScreenBuffer {
-    pub fn new(size: (u16, u16)) -> Self {
+    pub fn new(size: (usize, usize)) -> Self {
         Self {
             size,
 
-            cells: vec![' '; (size.0 * size.1).into()],
+            cells: vec![' '; size.0 * size.1],
         }
     }
 
-    pub fn resize(&mut self, new_size: (u16, u16)) {
+    pub fn resize(&mut self, new_size: (usize, usize)) {
         self.size = new_size;
-        self.cells.resize((new_size.0 * new_size.1).into(), ' ');
+        self.cells.resize(new_size.0 * new_size.1, ' ');
+    }
+
+    pub fn size(&self) -> (usize, usize) {
+        self.size
     }
 
     pub fn insert_char(&mut self, c: char, idx: usize) {
         self.cells[idx] = c;
     }
 
-    pub fn diff<'a>(&'a self, other: &Self) -> Result<ScreenBufferDiff> {
+    // get diff of two buffers,
+    // for each cell returning None if they are the same
+    // and Some(c) if they are different, with c being
+    // the char in other
+    pub fn diff(&self, other: &Self) -> Result<ScreenBufferDiff> {
         if self.size != other.size {
             anyhow::bail!("Input buffers must have the same length");
         }
@@ -56,7 +64,7 @@ mod tests {
     impl From<String> for ScreenBuffer {
         fn from(value: String) -> Self {
             Self {
-                size: (value.len().try_into().unwrap(), 1),
+                size: (value.len(), 1),
                 cells: value.chars().collect(),
             }
         }
