@@ -9,7 +9,13 @@ use crossterm::{
 };
 use tokio::{fs::File, io::BufReader};
 
-use crate::term::Terminal;
+use crate::{
+    math::Rect,
+    term::{
+        tui::{Frame, Renderable},
+        Terminal,
+    },
+};
 
 pub struct Editor {
     documents: Vec<Document>,
@@ -81,12 +87,11 @@ impl Editor {
         Ok(())
     }
 
-    pub async fn draw(&self, terminal: &mut Terminal) -> Result<()> {
+    pub async fn draw(&self, frame: &mut Frame<'_>, size: Rect) -> Result<()> {
         let lines = self.get_active_doc().buffer.lines_at(self.scroll);
-        let size = terminal.size().await;
         let cursor_pos = self.get_active_doc().cursor_pos(None);
 
-        for line in lines.take(size.1) {
+        for line in lines.take(size.height()) {
             terminal.queue(MoveToColumn(0))?.queue(Print(line))?;
         }
 
@@ -96,6 +101,12 @@ impl Editor {
             .queue(MoveTo(cursor_pos.0 - self.scroll as u16, cursor_pos.1))?;
 
         Ok(())
+    }
+}
+
+impl Renderable for Editor {
+    fn render(&self, frame: &mut Frame, size: Rect) {
+        self.draw(frame, size);
     }
 }
 

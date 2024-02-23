@@ -2,4 +2,4 @@
 
 pub mod editor;
 pub mod math;
-pub mod term;
+pub mod tui;
